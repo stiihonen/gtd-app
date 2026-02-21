@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-surface-0 text-gray-100 antialiased;
+  }
+
+  body {
+    @apply min-h-screen;
+  }
+
+  * {
+    @apply box-border;
+  }
+
+  ::selection {
+    @apply bg-accent-blue/30;
+  }
+
+  input, textarea {
+    @apply outline-none;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-surface-3 rounded-full;
+  }
+}
