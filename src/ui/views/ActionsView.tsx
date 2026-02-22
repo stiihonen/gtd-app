@@ -5,13 +5,15 @@ import { CONTEXTS, ENERGY_LABELS } from '../../domain/entities/NextAction'
 import type { CreateNextActionInput } from '../../application/commands/nextActions'
 import { getNextActionState } from '../../domain/state-machines/nextAction'
 import { formatDistanceToNow } from 'date-fns'
+import { EditActionModal } from '../components/EditActionModal'
 
 export function ActionsView() {
   const [showForm, setShowForm] = useState(false)
   const [contextFilter, setContextFilter] = useState<Context | 'all'>('all')
   const [showCompleted, setShowCompleted] = useState(false)
+  const [editingAction, setEditingAction] = useState<NextAction | null>(null)
 
-  const { nextActions, projects, addNextAction, complete, uncomplete, deleteNextAction } = useStore()
+  const { nextActions, projects, addNextAction, complete, uncomplete, deleteNextAction, updateNextAction } = useStore()
 
   const available = nextActions.filter(a => getNextActionState(a) === 'available')
   const completed = nextActions.filter(a => getNextActionState(a) === 'completed')
@@ -22,6 +24,14 @@ export function ActionsView() {
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
+      {editingAction && (
+        <EditActionModal
+          action={editingAction}
+          projects={projects.filter(p => p.status === 'active')}
+          onClose={() => setEditingAction(null)}
+          onSave={updates => { updateNextAction(editingAction.id, updates); setEditingAction(null) }}
+        />
+      )}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-semibold text-white">Next Actions</h1>
         <button
@@ -72,6 +82,7 @@ export function ActionsView() {
               projectTitle={projects.find(p => p.id === action.project_id)?.title}
               onComplete={() => complete(action.id)}
               onDelete={() => deleteNextAction(action.id)}
+              onEdit={() => setEditingAction(action)}
             />
           ))}
         </div>
@@ -97,6 +108,7 @@ export function ActionsView() {
                   onComplete={() => uncomplete(action.id)}
                   onDelete={() => deleteNextAction(action.id)}
                   dimmed
+                  onEdit={() => setEditingAction(action)}
                 />
               ))}
             </div>
@@ -108,12 +120,13 @@ export function ActionsView() {
 }
 
 function ActionRow({
-  action, projectTitle, onComplete, onDelete, dimmed
+  action, projectTitle, onComplete, onDelete, onEdit, dimmed
 }: {
   action: NextAction
   projectTitle?: string
   onComplete: () => void
   onDelete: () => void
+  onEdit?: () => void
   dimmed?: boolean
 }) {
   const isDone = !!action.completed_at
@@ -162,6 +175,16 @@ function ActionRow({
           )}
         </div>
       </div>
+
+      {/* Edit */}
+      {onEdit && (
+        <button
+          onClick={onEdit}
+          className="flex-shrink-0 opacity-0 group-hover:opacity-100 text-xs text-gray-600 hover:text-accent-blue transition-all"
+        >
+          ✎
+        </button>
+      )}
 
       {/* Delete */}
       <button

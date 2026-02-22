@@ -44,6 +44,7 @@ interface GTDState {
   complete: (id: string) => void
   uncomplete: (id: string) => void
   deleteNextAction: (id: string) => void
+  updateNextAction: (id: string, updates: Partial<NextAction>) => void
 
   // Waiting For
   addWaitingFor: (input: CreateWaitingForInput) => WaitingFor
@@ -211,6 +212,11 @@ export const useStore = create<GTDState>((set, get) => ({
       return { nextActions: updated }
     })
     supabaseRepo.deleteNextAction(id).catch(console.error)
+  },
+
+  updateNextAction(id, updates) {
+    set(s => ({ nextActions: s.nextActions.map(a => a.id === id ? { ...a, ...updates } : a) }))
+    supabaseRepo.updateNextAction(id, updates).catch(console.error)
   },
 
   // --- Waiting For ---
