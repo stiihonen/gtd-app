@@ -6,6 +6,7 @@ export interface CreateProjectInput {
   outcome_statement: string
   review_interval?: number
   notes?: string
+  due_date?: Date
 }
 
 export function createProject(input: CreateProjectInput): Project {
@@ -16,6 +17,7 @@ export function createProject(input: CreateProjectInput): Project {
     status: 'active',
     review_interval: input.review_interval ?? 7,
     notes: input.notes,
+    due_date: input.due_date,
     created_at: new Date(),
   }
 }

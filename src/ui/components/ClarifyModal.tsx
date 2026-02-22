@@ -31,6 +31,7 @@ interface FormState {
   context: Context
   energy: EnergyLevel
   timeEstimate: string
+  dueDate: string
 }
 
 export function ClarifyModal({ item, onClose }: Props) {
@@ -52,6 +53,7 @@ export function ClarifyModal({ item, onClose }: Props) {
     context: inferred.context,
     energy: inferred.energy,
     timeEstimate: inferred.timeEstimate,
+    dueDate: '',
   })
 
   useEffect(() => {
@@ -73,7 +75,7 @@ export function ClarifyModal({ item, onClose }: Props) {
   // --- Final commit ---
   function commit() {
     const { outcome, nextActionTitle, isProject, who, waitingOwner, waitingExpectedBy,
-            context, energy, timeEstimate } = form
+            context, energy, timeEstimate, dueDate } = form
 
     let projectId: string | undefined = form.projectId
 
@@ -92,6 +94,7 @@ export function ClarifyModal({ item, onClose }: Props) {
         energy,
         time_estimate: parseInt(timeEstimate) || 30,
         project_id: projectId,
+        due_date: dueDate ? new Date(dueDate) : undefined,
       })
     } else {
       addWaitingFor({
@@ -213,10 +216,12 @@ export function ClarifyModal({ item, onClose }: Props) {
               context={form.context}
               energy={form.energy}
               timeEstimate={form.timeEstimate}
+              dueDate={form.dueDate}
               inferred={inferred}
               onChange={(context, energy, timeEstimate) =>
                 patch({ context, energy, timeEstimate })
               }
+              onDueDateChange={v => patch({ dueDate: v })}
               onCommit={commit}
             />
           )}
@@ -397,13 +402,15 @@ function StepWaitingDetails({
 }
 
 function StepActionDetails({
-  context, energy, timeEstimate, inferred, onChange, onCommit
+  context, energy, timeEstimate, dueDate, inferred, onChange, onDueDateChange, onCommit
 }: {
   context: Context
   energy: EnergyLevel
   timeEstimate: string
+  dueDate: string
   inferred: { context: Context; energy: EnergyLevel; timeEstimate: string }
   onChange: (context: Context, energy: EnergyLevel, timeEstimate: string) => void
+  onDueDateChange: (v: string) => void
   onCommit: () => void
 }) {
   const contextSuggested = context === inferred.context
@@ -478,6 +485,13 @@ function StepActionDetails({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Due date */}
+        <div>
+          <label className="block text-xs text-gray-500 mb-1.5">Due date (optional)</label>
+          <input type="date" value={dueDate} onChange={e => onDueDateChange(e.target.value)}
+            className="w-full bg-surface-2 border border-surface-3 rounded-lg px-4 py-2.5 text-sm text-white focus:border-accent-blue/60 transition-colors" />
         </div>
       </div>
 

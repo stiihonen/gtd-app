@@ -207,6 +207,7 @@ export function NextActionForm({
   const [energy, setEnergy] = useState<EnergyLevel>(2)
   const [timeEstimate, setTimeEstimate] = useState('30')
   const [projectId, setProjectId] = useState('')
+  const [dueDate, setDueDate] = useState('')
 
   function handleSave() {
     if (!title.trim()) return
@@ -216,6 +217,7 @@ export function NextActionForm({
       energy,
       time_estimate: parseInt(timeEstimate) || 30,
       project_id: projectId || undefined,
+      due_date: dueDate ? new Date(dueDate) : undefined,
     })
   }
 
@@ -298,6 +300,13 @@ export function NextActionForm({
             </select>
           </div>
         )}
+
+        {/* Due date */}
+        <div>
+          <label className="block text-xs text-gray-600 mb-1">Due date (optional)</label>
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+            className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-xs text-gray-300 focus:border-accent-blue/60 transition-colors" />
+        </div>
 
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">

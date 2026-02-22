@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from 'react'
+import { format } from 'date-fns'
 import { useStore } from '../../store'
 import type { Project, ProjectStatus } from '../../domain/entities/Project'
 import type { CreateProjectInput } from '../../application/commands/projects'
@@ -23,7 +24,7 @@ export function ProjectsView() {
   const [showForm, setShowForm] = useState(false)
   const [filter, setFilter] = useState<ProjectStatus | 'all'>('active')
 
-  const { projects, nextActions, waitingFor, addProject, setProjectStatus, deleteProject } = useStore()
+  const { projects, nextActions, waitingFor, addProject, setProjectStatus, setProjectDueDate, deleteProject } = useStore()
 
   const visible = filter === 'all'
     ? projects
@@ -98,6 +99,7 @@ export function ProjectsView() {
               actionCount={getActionCount(project.id)}
               waitingCount={getWaitingCount(project.id)}
               onSetStatus={status => setProjectStatus(project.id, status)}
+              onSetDueDate={d => setProjectDueDate(project.id, d)}
               onDelete={() => deleteProject(project.id)}
             />
           ))}
@@ -108,12 +110,13 @@ export function ProjectsView() {
 }
 
 function ProjectCard({
-  project, actionCount, waitingCount, onSetStatus, onDelete
+  project, actionCount, waitingCount, onSetStatus, onSetDueDate, onDelete
 }: {
   project: Project
   actionCount: number
   waitingCount: number
   onSetStatus: (s: ProjectStatus) => void
+  onSetDueDate: (d?: Date) => void
   onDelete: () => void
 }) {
   const [expanded, setExpanded] = useState(false)
@@ -137,6 +140,9 @@ function ProjectCard({
           <div className="flex items-center gap-2 flex-shrink-0 text-xs text-gray-600">
             {actionCount > 0 && <span className="text-accent-green">▷ {actionCount}</span>}
             {waitingCount > 0 && <span className="text-accent-amber">⧖ {waitingCount}</span>}
+            {project.due_date && (
+              <span className="text-xs text-accent-amber">due {format(project.due_date, 'MMM d')}</span>
+            )}
           </div>
         </div>
       </div>
@@ -144,6 +150,15 @@ function ProjectCard({
       {expanded && (
         <div className="px-4 pb-3 border-t border-surface-2 pt-3">
           <p className="text-xs text-gray-500 mb-3">{project.outcome_statement}</p>
+          <div className="mb-3">
+            <label className="block text-xs text-gray-600 mb-1">Due date</label>
+            <input
+              type="date"
+              defaultValue={project.due_date ? format(project.due_date, 'yyyy-MM-dd') : ''}
+              onChange={e => onSetDueDate(e.target.value ? new Date(e.target.value) : undefined)}
+              className="bg-surface-2 border border-surface-3 rounded px-2 py-1 text-xs text-gray-300 focus:border-accent-blue/60 transition-colors"
+            />
+          </div>
           <div className="flex gap-1.5 flex-wrap">
             {project.status !== 'active' && (
               <StatusBtn onClick={() => onSetStatus('active')} color="green">Activate</StatusBtn>
@@ -194,12 +209,14 @@ export function ProjectForm({
 }) {
   const [title, setTitle] = useState('')
   const [outcome, setOutcome] = useState('')
+  const [dueDate, setDueDate] = useState('')
 
   function handleSubmit() {
     if (!title.trim()) return
     onSave({
       title: title.trim(),
       outcome_statement: outcome.trim() || title.trim(),
+      due_date: dueDate ? new Date(dueDate) : undefined,
     })
   }
 
@@ -228,6 +245,11 @@ export function ProjectForm({
             rows={2}
             className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 resize-none focus:border-accent-blue/60 transition-colors"
           />
+        </div>
+        <div>
+          <label className="block text-xs text-gray-500 mb-1">Due date (optional)</label>
+          <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
+            className="w-full bg-surface-2 border border-surface-3 rounded-lg px-3 py-2 text-sm text-white focus:border-accent-blue/60 transition-colors" />
         </div>
         <div className="flex gap-2 justify-end">
           <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-300 transition-colors">

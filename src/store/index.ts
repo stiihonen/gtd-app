@@ -35,6 +35,7 @@ interface GTDState {
   // Projects
   addProject: (input: CreateProjectInput) => Project
   setProjectStatus: (id: string, status: ProjectStatus) => void
+  setProjectDueDate: (id: string, dueDate?: Date) => void
   reviewProject: (id: string) => void
   deleteProject: (id: string) => void
 
@@ -139,6 +140,11 @@ export const useStore = create<GTDState>((set, get) => ({
     if (project) {
       supabaseRepo.updateProject(id, { status }).catch(console.error)
     }
+  },
+
+  setProjectDueDate(id, dueDate) {
+    set(s => ({ projects: s.projects.map(p => p.id === id ? { ...p, due_date: dueDate } : p) }))
+    supabaseRepo.updateProject(id, { due_date: dueDate }).catch(console.error)
   },
 
   reviewProject(id) {

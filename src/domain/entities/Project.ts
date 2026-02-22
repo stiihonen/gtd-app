@@ -9,6 +9,7 @@ export interface Project {
   /** How often this project should be reviewed, in days */
   review_interval: number
   notes?: string
+  due_date?: Date
   created_at: Date
   completed_at?: Date
   last_reviewed_at?: Date

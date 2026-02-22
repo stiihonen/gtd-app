@@ -38,6 +38,7 @@ function parseProject(row: Record<string, unknown>): Project {
     status: row.status as Project['status'],
     review_interval: row.review_interval as number,
     notes: row.notes as string | undefined,
+    due_date: row.due_date ? new Date(row.due_date as string) : undefined,
     created_at: new Date(row.created_at as string),
     completed_at: row.completed_at ? new Date(row.completed_at as string) : undefined,
     last_reviewed_at: row.last_reviewed_at ? new Date(row.last_reviewed_at as string) : undefined,
@@ -144,6 +145,7 @@ export const supabaseRepo = {
       status: p.status,
       review_interval: p.review_interval,
       notes: p.notes,
+      due_date: p.due_date?.toISOString(),
       created_at: p.created_at.toISOString(),
       completed_at: p.completed_at?.toISOString(),
       last_reviewed_at: p.last_reviewed_at?.toISOString(),
@@ -158,6 +160,7 @@ export const supabaseRepo = {
     if (updates.status !== undefined) payload.status = updates.status
     if (updates.review_interval !== undefined) payload.review_interval = updates.review_interval
     if (updates.notes !== undefined) payload.notes = updates.notes
+    if (updates.due_date !== undefined) payload.due_date = updates.due_date?.toISOString() ?? null
     if (updates.completed_at !== undefined) payload.completed_at = updates.completed_at?.toISOString()
     if (updates.last_reviewed_at !== undefined) payload.last_reviewed_at = updates.last_reviewed_at?.toISOString()
     await supabase.from('projects').update(payload).eq('id', id).eq('user_id', userId)
