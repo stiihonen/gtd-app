@@ -7,7 +7,7 @@ import { getWaitingForState } from '../state-machines/waitingFor'
 export interface EngageInput {
   available_minutes: number
   energy: EnergyLevel
-  context: Context
+  contexts: Context[]
 }
 
 export interface EngageState {
@@ -80,7 +80,7 @@ export function engageEngine(
   const eligible = state.nextActions.filter(action =>
     isEligible(
       action,
-      { context: input.context, energy: input.energy, availableMinutes: input.available_minutes },
+      { contexts: input.contexts, energy: input.energy, availableMinutes: input.available_minutes },
       now
     )
   )

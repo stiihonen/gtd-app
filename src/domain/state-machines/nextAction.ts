@@ -11,11 +11,11 @@ export function getNextActionState(
 
 export function isEligible(
   action: NextAction,
-  opts: { context: string; energy: number; availableMinutes: number },
+  opts: { contexts: string[]; energy: number; availableMinutes: number },
   now: Date = new Date()
 ): boolean {
   if (getNextActionState(action, now) !== 'available') return false
-  if (action.context !== opts.context && opts.context !== '@anywhere') return false
+  if (!opts.contexts.includes(action.context)) return false
   if (action.energy > opts.energy) return false
   if (action.time_estimate > opts.availableMinutes) return false
   return true

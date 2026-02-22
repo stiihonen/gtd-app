@@ -1,26 +1,57 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useStore } from '../../store'
 import type { Context, EnergyLevel } from '../../domain/entities/NextAction'
 import { CONTEXTS, ENERGY_LABELS } from '../../domain/entities/NextAction'
 import { engageEngine, type RankedAction } from '../../domain/engine/engageEngine'
-import { formatDistanceToNow } from 'date-fns'
+import { useGoogleCalendar } from '../../hooks/useGoogleCalendar'
+import { formatDistanceToNow, format } from 'date-fns'
 
 export function FocusView() {
-  const [context, setContext] = useState<Context>(CONTEXTS[0])
+  const [contexts, setContexts] = useState<Context[]>(['@computer'])
   const [energy, setEnergy] = useState<EnergyLevel>(2)
   const [availableMinutes, setAvailableMinutes] = useState(30)
+  const [calendarSetTime, setCalendarSetTime] = useState(false)
 
   const nextActions = useStore(s => s.nextActions)
   const projects    = useStore(s => s.projects)
   const waitingFor  = useStore(s => s.waitingFor)
   const complete    = useStore(s => s.complete)
 
+  const { isConnected, events, loading: calLoading, signIn, signOut } = useGoogleCalendar()
+
+  // Find the next non-all-day event that starts in the future
+  const now = new Date()
+  const nextEvent = events.find(e => !e.allDay && e.start > now) ?? null
+
+  // When events load and there is an upcoming event, auto-set available time
+  useEffect(() => {
+    if (!nextEvent) return
+    const minutesUntil = Math.floor((nextEvent.start.getTime() - now.getTime()) / 60000)
+    const suggested = Math.max(5, minutesUntil - 5)
+    setAvailableMinutes(suggested)
+    setCalendarSetTime(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [nextEvent?.id])
+
+  const toggleContext = (ctx: Context) => {
+    setContexts(prev => {
+      if (prev.includes(ctx)) {
+        // Keep at least one selected
+        if (prev.length === 1) return prev
+        return prev.filter(c => c !== ctx)
+      }
+      return [...prev, ctx]
+    })
+  }
+
   const ranked = engageEngine(
-    { context, energy, available_minutes: availableMinutes },
+    { contexts, energy, available_minutes: availableMinutes },
     { nextActions, projects, waitingFor }
   )
 
   const top3 = ranked.slice(0, 3)
+  const upcomingEvents = events.filter(e => !e.allDay && e.start > now).slice(0, 3)
+  const allDayEvents = events.filter(e => e.allDay)
 
   const energyColors: Record<EnergyLevel, string> = {
     1: 'bg-accent-green text-surface-0',
@@ -34,18 +65,27 @@ export function FocusView() {
 
       {/* Inputs */}
       <div className="bg-surface-1 border border-surface-2 rounded-xl px-5 py-4 mb-6 space-y-4">
-        {/* Context */}
+        {/* Context chips (multi-select) */}
         <div>
           <label className="block text-xs text-gray-500 mb-1.5">Context</label>
-          <select
-            value={context}
-            onChange={e => setContext(e.target.value as Context)}
-            className="bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-sm text-gray-200 w-full"
-          >
-            {CONTEXTS.map(ctx => (
-              <option key={ctx} value={ctx}>{ctx}</option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-1.5">
+            {CONTEXTS.map(ctx => {
+              const selected = contexts.includes(ctx)
+              return (
+                <button
+                  key={ctx}
+                  onClick={() => toggleContext(ctx)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-mono transition-colors ${
+                    selected
+                      ? 'bg-accent-blue text-white'
+                      : 'bg-surface-2 text-gray-500 hover:text-gray-300'
+                  }`}
+                >
+                  {ctx}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Energy */}
@@ -78,11 +118,70 @@ export function FocusView() {
               max={480}
               step={5}
               value={availableMinutes}
-              onChange={e => setAvailableMinutes(Math.max(1, parseInt(e.target.value) || 1))}
+              onChange={e => {
+                setAvailableMinutes(Math.max(1, parseInt(e.target.value) || 1))
+                setCalendarSetTime(false)
+              }}
               className="w-24 bg-surface-2 border border-surface-3 rounded-lg px-3 py-1.5 text-sm text-gray-200"
             />
             <span className="text-xs text-gray-600">min</span>
+            {calendarSetTime && nextEvent && (
+              <span className="text-xs text-gray-500">from calendar</span>
+            )}
           </div>
+        </div>
+
+        {/* Google Calendar section */}
+        <div className="border-t border-surface-2 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-xs text-gray-500">Calendar</label>
+            {isConnected && (
+              <button
+                onClick={signOut}
+                className="text-xs text-gray-600 hover:text-gray-400 transition-colors"
+              >
+                disconnect
+              </button>
+            )}
+          </div>
+
+          {!isConnected ? (
+            <button
+              onClick={signIn}
+              className="text-xs px-3 py-1.5 bg-surface-2 border border-surface-3 text-gray-400 hover:text-gray-200 rounded-lg transition-colors"
+            >
+              Connect Google Calendar
+            </button>
+          ) : calLoading ? (
+            <p className="text-xs text-gray-600">Loading events…</p>
+          ) : upcomingEvents.length === 0 && allDayEvents.length === 0 ? (
+            <p className="text-xs text-gray-600">No more events today</p>
+          ) : (
+            <div className="space-y-1.5">
+              {allDayEvents.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-1">
+                  {allDayEvents.map(event => (
+                    <span
+                      key={event.id}
+                      className="text-xs px-2 py-0.5 bg-surface-2 text-gray-500 rounded-full"
+                    >
+                      {event.title}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {upcomingEvents.map(event => {
+                const minutesAway = Math.floor((event.start.getTime() - now.getTime()) / 60000)
+                return (
+                  <div key={event.id} className="flex items-center gap-2 text-xs">
+                    <span className="text-gray-300 truncate flex-1">{event.title}</span>
+                    <span className="text-gray-600 flex-shrink-0">{format(event.start, 'HH:mm')}</span>
+                    <span className="text-gray-700 flex-shrink-0">in {minutesAway}m</span>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
