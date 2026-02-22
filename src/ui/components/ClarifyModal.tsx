@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect, type ReactNode, type RefObject } from 'react'
+import { useState, useRef, useEffect, useMemo, type ReactNode, type RefObject } from 'react'
 import type { InboxItem } from '../../domain/entities/InboxItem'
 import type { Context, EnergyLevel } from '../../domain/entities/NextAction'
 import { CONTEXTS, ENERGY_LABELS } from '../../domain/entities/NextAction'
 import { useStore } from '../../store'
+import { parseInboxItem } from '../../domain/inference/clarifyParser'
 
 interface Props {
   item: InboxItem
@@ -23,6 +24,7 @@ interface FormState {
   outcome: string
   nextActionTitle: string
   isProject: boolean
+  projectId?: string
   who: 'me' | 'someone_else' | null
   waitingOwner: string
   waitingExpectedBy: string
@@ -31,24 +33,26 @@ interface FormState {
   timeEstimate: string
 }
 
-const INITIAL_FORM: FormState = {
-  outcome: '',
-  nextActionTitle: '',
-  isProject: false,
-  who: null,
-  waitingOwner: '',
-  waitingExpectedBy: '',
-  context: '@computer',
-  energy: 2,
-  timeEstimate: '30',
-}
-
 export function ClarifyModal({ item, onClose }: Props) {
   const [step, setStep] = useState<Step>('actionable')
-  const [form, setForm] = useState<FormState>(INITIAL_FORM)
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
 
   const { clarifyAsClarified, deleteInboxItem, addProject, addNextAction, addWaitingFor } = useStore()
+  const projects = useStore(s => s.projects)
+  const inferred = useMemo(() => parseInboxItem(item.content, projects), [item.content, projects])
+
+  const [form, setForm] = useState<FormState>({
+    outcome: '',
+    nextActionTitle: inferred.nextActionTitle,
+    isProject: false,
+    projectId: undefined,
+    who: null,
+    waitingOwner: '',
+    waitingExpectedBy: '',
+    context: inferred.context,
+    energy: inferred.energy,
+    timeEstimate: inferred.timeEstimate,
+  })
 
   useEffect(() => {
     // Auto-focus text inputs when step changes
@@ -71,9 +75,9 @@ export function ClarifyModal({ item, onClose }: Props) {
     const { outcome, nextActionTitle, isProject, who, waitingOwner, waitingExpectedBy,
             context, energy, timeEstimate } = form
 
-    let projectId: string | undefined
+    let projectId: string | undefined = form.projectId
 
-    if (isProject) {
+    if (isProject && !projectId) {
       const project = addProject({
         title: outcome,
         outcome_statement: outcome,
@@ -176,8 +180,14 @@ export function ClarifyModal({ item, onClose }: Props) {
 
           {step === 'project_check' && (
             <StepProjectCheck
-              onYes={() => { patch({ isProject: true }); setStep('who') }}
-              onNo={() => { patch({ isProject: false }); setStep('who') }}
+              onYes={() => { patch({ isProject: true, projectId: undefined }); setStep('who') }}
+              onNo={() => { patch({ isProject: false, projectId: undefined }); setStep('who') }}
+              inferredProject={
+                inferred.inferredProjectId && inferred.inferredProjectTitle
+                  ? { id: inferred.inferredProjectId, title: inferred.inferredProjectTitle }
+                  : undefined
+              }
+              onUseExisting={proj => { patch({ isProject: false, projectId: proj.id }); setStep('who') }}
             />
           )}
 
@@ -203,6 +213,7 @@ export function ClarifyModal({ item, onClose }: Props) {
               context={form.context}
               energy={form.energy}
               timeEstimate={form.timeEstimate}
+              inferred={inferred}
               onChange={(context, energy, timeEstimate) =>
                 patch({ context, energy, timeEstimate })
               }
@@ -300,14 +311,31 @@ function StepNextAction({
   )
 }
 
-function StepProjectCheck({ onYes, onNo }: { onYes: () => void; onNo: () => void }) {
+function StepProjectCheck({
+  onYes, onNo, inferredProject, onUseExisting
+}: {
+  onYes: () => void
+  onNo: () => void
+  inferredProject?: { id: string; title: string }
+  onUseExisting: (proj: { id: string; title: string }) => void
+}) {
   return (
     <div>
       <h2 className="text-lg font-semibold text-white mb-1">Does this require more than one action?</h2>
       <p className="text-sm text-gray-500 mb-6">If yes, it's a project — you'll track it separately.</p>
-      <div className="flex gap-3">
-        <BigButton onClick={onYes} variant="ghost">Yes — it's a project</BigButton>
-        <BigButton onClick={onNo} variant="primary">No — just one action</BigButton>
+      <div className="flex flex-col gap-2">
+        <div className="flex gap-3">
+          <BigButton onClick={onYes} variant="ghost">Yes — it's a project</BigButton>
+          <BigButton onClick={onNo} variant="primary">No — just one action</BigButton>
+        </div>
+        {inferredProject && (
+          <button
+            onClick={() => onUseExisting(inferredProject)}
+            className="w-full py-3 px-4 rounded-xl text-sm font-medium transition-colors bg-surface-2 hover:bg-surface-3 text-gray-200 border border-surface-3 text-left"
+          >
+            Use existing: <span className="text-white font-semibold">"{inferredProject.title}"</span>
+          </button>
+        )}
       </div>
     </div>
   )
@@ -369,21 +397,28 @@ function StepWaitingDetails({
 }
 
 function StepActionDetails({
-  context, energy, timeEstimate, onChange, onCommit
+  context, energy, timeEstimate, inferred, onChange, onCommit
 }: {
   context: Context
   energy: EnergyLevel
   timeEstimate: string
+  inferred: { context: Context; energy: EnergyLevel; timeEstimate: string }
   onChange: (context: Context, energy: EnergyLevel, timeEstimate: string) => void
   onCommit: () => void
 }) {
+  const contextSuggested = context === inferred.context
+  const energySuggested = energy === inferred.energy
+  const timeSuggested = timeEstimate === inferred.timeEstimate
+
   return (
     <div>
       <h2 className="text-lg font-semibold text-white mb-4">Action details</h2>
       <div className="space-y-4">
         {/* Context */}
         <div>
-          <label className="block text-xs text-gray-500 mb-1.5">Context</label>
+          <label className="block text-xs text-gray-500 mb-1.5">
+            Context{contextSuggested && <span className="ml-1.5 text-gray-600">· suggested</span>}
+          </label>
           <div className="flex flex-wrap gap-1.5">
             {CONTEXTS.map(ctx => (
               <button
@@ -403,7 +438,9 @@ function StepActionDetails({
 
         {/* Energy */}
         <div>
-          <label className="block text-xs text-gray-500 mb-1.5">Energy required</label>
+          <label className="block text-xs text-gray-500 mb-1.5">
+            Energy required{energySuggested && <span className="ml-1.5 text-gray-600">· suggested</span>}
+          </label>
           <div className="flex gap-2">
             {([1, 2, 3] as EnergyLevel[]).map(e => (
               <button
@@ -423,7 +460,9 @@ function StepActionDetails({
 
         {/* Time estimate */}
         <div>
-          <label className="block text-xs text-gray-500 mb-1.5">Time estimate (minutes)</label>
+          <label className="block text-xs text-gray-500 mb-1.5">
+            Time estimate (minutes){timeSuggested && <span className="ml-1.5 text-gray-600">· suggested</span>}
+          </label>
           <div className="flex gap-1.5 flex-wrap">
             {['5', '15', '30', '60', '90', '120'].map(t => (
               <button
