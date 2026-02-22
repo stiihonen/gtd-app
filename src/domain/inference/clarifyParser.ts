@@ -63,7 +63,7 @@ function inferTimeEstimate(content: string): string {
   if (/half.?hour/i.test(content)) return '30'
 
   // Keyword-based
-  if (/\bquick\b|\bbrief\b|\bping\b/i.test(content)) return '15'
+  if (/\bquick\b|\bbrief\b|\bping\b|\bcheck\b|\bconfirm\b|\bremind\b/i.test(content)) return '15'
   if (/\bcall\b|\bemail\b|\bmessage\b/i.test(content)) return '15'
   if (/\bmeeting\b|\bsync\b|\bstandup\b/i.test(content)) return '30'
   if (/\breview\b|\bwrite\b|\bresearch\b|\bdraft\b/i.test(content)) return '60'

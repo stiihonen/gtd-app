@@ -176,7 +176,11 @@ export function ClarifyModal({ item, onClose }: Props) {
             <StepNextAction
               value={form.nextActionTitle}
               onChange={v => patch({ nextActionTitle: v })}
-              onNext={() => setStep('project_check')}
+              onNext={() => {
+                const re = parseInboxItem(form.nextActionTitle, projects)
+                patch({ context: re.context, energy: re.energy, timeEstimate: re.timeEstimate })
+                setStep('project_check')
+              }}
               inputRef={inputRef as RefObject<HTMLInputElement>}
             />
           )}
