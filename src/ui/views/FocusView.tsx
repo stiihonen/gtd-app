@@ -17,7 +17,7 @@ export function FocusView() {
   const waitingFor  = useStore(s => s.waitingFor)
   const complete    = useStore(s => s.complete)
 
-  const { isConnected, events, loading: calLoading, signIn, signOut } = useGoogleCalendar()
+  const { isConnected, events, loading: calLoading, calendarList, selectedCalendarIds, toggleCalendar, signIn, signOut } = useGoogleCalendar()
 
   // Find the next non-all-day event that starts in the future
   const now = new Date()
@@ -154,33 +154,54 @@ export function FocusView() {
             </button>
           ) : calLoading ? (
             <p className="text-xs text-gray-600">Loading events…</p>
-          ) : upcomingEvents.length === 0 && allDayEvents.length === 0 ? (
-            <p className="text-xs text-gray-600">No more events today</p>
           ) : (
-            <div className="space-y-1.5">
-              {allDayEvents.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mb-1">
-                  {allDayEvents.map(event => (
-                    <span
-                      key={event.id}
-                      className="text-xs px-2 py-0.5 bg-surface-2 text-gray-500 rounded-full"
+            <>
+              {calendarList.length > 1 && (
+                <div className="flex flex-wrap gap-1.5 mb-2">
+                  {calendarList.map(cal => (
+                    <button
+                      key={cal.id}
+                      onClick={() => toggleCalendar(cal.id)}
+                      className={`px-2.5 py-1 rounded-full text-xs font-mono transition-colors ${
+                        selectedCalendarIds.includes(cal.id)
+                          ? 'bg-accent-blue text-white'
+                          : 'bg-surface-2 text-gray-500 hover:text-gray-300'
+                      }`}
                     >
-                      {event.title}
-                    </span>
+                      {cal.summary}
+                    </button>
                   ))}
                 </div>
               )}
-              {upcomingEvents.map(event => {
-                const minutesAway = Math.floor((event.start.getTime() - now.getTime()) / 60000)
-                return (
-                  <div key={event.id} className="flex items-center gap-2 text-xs">
-                    <span className="text-gray-300 truncate flex-1">{event.title}</span>
-                    <span className="text-gray-600 flex-shrink-0">{format(event.start, 'HH:mm')}</span>
-                    <span className="text-gray-700 flex-shrink-0">in {minutesAway}m</span>
-                  </div>
-                )
-              })}
-            </div>
+              {upcomingEvents.length === 0 && allDayEvents.length === 0 ? (
+                <p className="text-xs text-gray-600">No more events today</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {allDayEvents.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-1">
+                      {allDayEvents.map(event => (
+                        <span
+                          key={event.id}
+                          className="text-xs px-2 py-0.5 bg-surface-2 text-gray-500 rounded-full"
+                        >
+                          {event.title}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {upcomingEvents.map(event => {
+                    const minutesAway = Math.floor((event.start.getTime() - now.getTime()) / 60000)
+                    return (
+                      <div key={event.id} className="flex items-center gap-2 text-xs">
+                        <span className="text-gray-300 truncate flex-1">{event.title}</span>
+                        <span className="text-gray-600 flex-shrink-0">{format(event.start, 'HH:mm')}</span>
+                        <span className="text-gray-700 flex-shrink-0">in {minutesAway}m</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

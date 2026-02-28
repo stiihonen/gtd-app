@@ -1,5 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { fetchUpcomingEvents, type CalendarEvent } from '../infrastructure/googleCalendar'
+import {
+  fetchCalendarList,
+  fetchEventsFromCalendars,
+  type CalendarEvent,
+  type CalendarListEntry,
+} from '../infrastructure/googleCalendar'
 
 // GIS (Google Identity Services) is loaded via <script> in index.html
 // Minimal type declaration so TypeScript doesn't complain
@@ -16,6 +21,7 @@ declare const google: {
 }
 
 const SESSION_KEY = 'goog_cal_token'
+const LOCAL_STORAGE_KEY = 'goog_cal_selected'
 const SCOPE = 'https://www.googleapis.com/auth/calendar.readonly'
 
 export function useGoogleCalendar() {
@@ -24,22 +30,54 @@ export function useGoogleCalendar() {
   )
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [loading, setLoading] = useState(false)
+  const [calendarList, setCalendarList] = useState<CalendarListEntry[]>([])
+  const [selectedCalendarIds, setSelectedCalendarIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem(LOCAL_STORAGE_KEY)
+      if (stored) return JSON.parse(stored) as string[]
+    } catch {
+      // ignore parse errors
+    }
+    return ['primary']
+  })
   // tokenClient is initialised once on mount
   const [tokenClient, setTokenClient] = useState<{ requestAccessToken: () => void } | null>(null)
 
-  // Fetch events whenever we have a valid access token
-  const loadEvents = useCallback(async (token: string) => {
+  const loadEvents = useCallback(async (token: string, calIds: string[]) => {
     setLoading(true)
     try {
-      const items = await fetchUpcomingEvents(token)
+      const items = await fetchEventsFromCalendars(token, calIds)
       setEvents(items)
-    } catch {
+    } catch (err) {
       // Token is likely expired — reset to signed-out state
       sessionStorage.removeItem(SESSION_KEY)
       setAccessToken(null)
       setEvents([])
     } finally {
       setLoading(false)
+    }
+  }, [])
+
+  const loadCalendarList = useCallback(async (token: string) => {
+    try {
+      const list = await fetchCalendarList(token)
+      setCalendarList(list)
+
+      // Normalize 'primary' alias → real primary ID
+      const primaryEntry = list.find(c => c.primary === true)
+      if (primaryEntry) {
+        setSelectedCalendarIds(prev => {
+          const normalized = prev.map(id => id === 'primary' ? primaryEntry.id : id)
+          // Prune IDs that no longer exist in the list
+          const validIds = list.map(c => c.id)
+          const pruned = normalized.filter(id => validIds.includes(id))
+          const result = pruned.length > 0 ? pruned : [primaryEntry.id]
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(result))
+          return result
+        })
+      }
+    } catch {
+      // Non-fatal: calendar list just won't show chips
     }
   }, [])
 
@@ -57,7 +95,12 @@ export function useGoogleCalendar() {
           if (response.access_token) {
             sessionStorage.setItem(SESSION_KEY, response.access_token)
             setAccessToken(response.access_token)
-            loadEvents(response.access_token)
+            // Use functional update to get fresh selectedCalendarIds
+            setSelectedCalendarIds(current => {
+              loadCalendarList(response.access_token!)
+              loadEvents(response.access_token!, current)
+              return current
+            })
           }
         },
       })
@@ -73,15 +116,38 @@ export function useGoogleCalendar() {
         script.addEventListener('load', init, { once: true })
       }
     }
-  }, [loadEvents])
+  }, [loadCalendarList, loadEvents])
 
-  // If we already have a stored token on mount, fetch events immediately
+  // If we already have a stored token on mount, load calendar list
   useEffect(() => {
     if (accessToken) {
-      loadEvents(accessToken)
+      loadCalendarList(accessToken)
     }
     // Only run on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // Reload events whenever token or selected calendars change
+  useEffect(() => {
+    if (accessToken) {
+      loadEvents(accessToken, selectedCalendarIds)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [accessToken, selectedCalendarIds])
+
+  const toggleCalendar = useCallback((id: string) => {
+    setSelectedCalendarIds(prev => {
+      let next: string[]
+      if (prev.includes(id)) {
+        // Prevent deselecting last
+        if (prev.length === 1) return prev
+        next = prev.filter(c => c !== id)
+      } else {
+        next = [...prev, id]
+      }
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(next))
+      return next
+    })
   }, [])
 
   const signIn = useCallback(() => {
@@ -92,12 +158,16 @@ export function useGoogleCalendar() {
     sessionStorage.removeItem(SESSION_KEY)
     setAccessToken(null)
     setEvents([])
+    setCalendarList([])
   }, [])
 
   return {
     isConnected: Boolean(accessToken),
     events,
     loading,
+    calendarList,
+    selectedCalendarIds,
+    toggleCalendar,
     signIn,
     signOut,
   }

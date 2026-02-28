@@ -18,6 +18,13 @@ export interface CalendarEvent {
   allDay: boolean
 }
 
+export interface CalendarListEntry {
+  id: string
+  summary: string
+  backgroundColor: string
+  primary?: boolean
+}
+
 interface GoogleEventDateTime {
   dateTime?: string
   date?: string
@@ -34,7 +41,36 @@ interface GoogleEventsResponse {
   items: GoogleEvent[]
 }
 
-export async function fetchUpcomingEvents(accessToken: string): Promise<CalendarEvent[]> {
+interface GoogleCalendarListResponse {
+  items: Array<{
+    id: string
+    summary: string
+    backgroundColor: string
+    primary?: boolean
+  }>
+}
+
+export async function fetchCalendarList(accessToken: string): Promise<CalendarListEntry[]> {
+  const response = await fetch(
+    'https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader',
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  )
+
+  if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED')
+    throw new Error(`Calendar API error: ${response.status}`)
+  }
+
+  const data: GoogleCalendarListResponse = await response.json()
+  return (data.items ?? []).map(item => ({
+    id: item.id,
+    summary: item.summary,
+    backgroundColor: item.backgroundColor,
+    primary: item.primary,
+  }))
+}
+
+export async function fetchUpcomingEvents(accessToken: string, calendarId = 'primary'): Promise<CalendarEvent[]> {
   const now = new Date()
   const endOfDay = new Date(now)
   endOfDay.setHours(23, 59, 59, 999)
@@ -48,11 +84,12 @@ export async function fetchUpcomingEvents(accessToken: string): Promise<Calendar
   })
 
   const response = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${params}`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   )
 
   if (!response.ok) {
+    if (response.status === 401) throw new Error('UNAUTHORIZED')
     throw new Error(`Calendar API error: ${response.status}`)
   }
 
@@ -75,4 +112,34 @@ export async function fetchUpcomingEvents(accessToken: string): Promise<Calendar
       allDay,
     }
   })
+}
+
+export async function fetchEventsFromCalendars(
+  accessToken: string,
+  calendarIds: string[]
+): Promise<CalendarEvent[]> {
+  const results = await Promise.allSettled(
+    calendarIds.map(id => fetchUpcomingEvents(accessToken, id))
+  )
+
+  const allUnauthorized = results.every(
+    r => r.status === 'rejected' && (r.reason as Error).message === 'UNAUTHORIZED'
+  )
+  if (allUnauthorized) throw new Error('UNAUTHORIZED')
+
+  const seen = new Set<string>()
+  const events: CalendarEvent[] = []
+
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      for (const event of result.value) {
+        if (!seen.has(event.id)) {
+          seen.add(event.id)
+          events.push(event)
+        }
+      }
+    }
+  }
+
+  return events.sort((a, b) => a.start.getTime() - b.start.getTime())
 }
